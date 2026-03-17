@@ -87,6 +87,16 @@ def _prune_oauth_states() -> None:
             del _oauth_states[k]
 
 
+def _request_base_url(request: Request) -> str:
+    """Base URL for redirect_uri etc. Use X-Forwarded-Proto/Host when behind a proxy (e.g. Railway)."""
+    base = str(request.base_url).rstrip("/")
+    proto = request.headers.get("X-Forwarded-Proto", "").strip().lower()
+    host = request.headers.get("X-Forwarded-Host", "").strip() or request.headers.get("Host", "").strip()
+    if proto and host:
+        return f"{proto}://{host}"
+    return base
+
+
 def _constant_time_compare(a: str, b: str) -> bool:
     return hmac.compare_digest(a.encode(), b.encode())
 
@@ -285,7 +295,7 @@ async def auth_github(request: Request, _: None = Depends(_auth_dep)):
             status_code=400,
             detail="GitHub OAuth not configured. Set OAuth Client ID and Secret in Settings.",
         )
-    base = str(request.base_url).rstrip("/")
+    base = _request_base_url(request)
     redirect_uri = f"{base}/api/auth/github/callback"
     state = secrets.token_urlsafe(32)
     _prune_oauth_states()
@@ -311,7 +321,7 @@ async def auth_github_callback(request: Request, _: None = Depends(_auth_dep)):
     if not state or state not in _oauth_states:
         return RedirectResponse(url="/?github=error&reason=state", status_code=302)
     del _oauth_states[state]
-    base = str(request.base_url).rstrip("/")
+    base = _request_base_url(request)
     redirect_uri = f"{base}/api/auth/github/callback"
     async with httpx.AsyncClient() as client:
         r = await client.post(
@@ -360,7 +370,7 @@ async def api_create_webhook(request: Request, body: CreateWebhookBody, _: None 
         raise HTTPException(status_code=401, detail="GitHub token not set. Connect GitHub or paste a token.")
     webhook_url = (body.webhook_url or "").strip()
     if not webhook_url:
-        base = str(request.base_url).rstrip("/")
+        base = _request_base_url(request)
         webhook_url = f"{base}/api/webhook/github"
     secret = (s.get("webhook_secret") or "").strip()
     try:

@@ -104,10 +104,12 @@ Do **not** put GitHub tokens or API keys here; set those in the app’s **Settin
    - **GitHub** (OAuth or token)
    - **Webhook secret** (recommended)
    - **AI provider** and API keys
-4. For **GitHub OAuth**, in [GitHub → Developer settings → OAuth Apps](https://github.com/settings/developers), set the callback URL to:
-   ```text
-   https://YOUR-RAILWAY-URL/api/auth/github/callback
-   ```
+4. For **GitHub OAuth**, you must register the **exact** callback URL in GitHub, or you’ll see “The redirect_uri is not associated with this application”:
+   - In the app’s settings page, the **OAuth callback** hint under “OAuth App Client ID” shows the URL the app will use (it’s the page origin + `/api/auth/github/callback`). **Copy that URL.**
+   - Go to [GitHub → Settings → Developer settings → OAuth Apps](https://github.com/settings/developers) and open your OAuth App (or create one).
+   - In **Authorization callback URL**, paste **exactly** that URL, e.g. `https://pr-reviewer-production-xxxx.up.railway.app/api/auth/github/callback`.
+   - No trailing slash, use **https** (not http), and the host must match the URL you use to open the app (e.g. your Railway domain).
+   - Click **Update application**. Then try **Connect with GitHub** again.
 5. In **Add webhook to a repo**, use your Railway URL as the base (or leave Webhook URL empty to use the current origin). Create the webhook from the UI or add it manually in the repo with:
    - **Payload URL:** `https://YOUR-RAILWAY-URL/api/webhook/github`
    - **Content type:** `application/json`
@@ -128,6 +130,7 @@ That path is persisted by the **Railway Volume** you mounted in step 4. Postgres
 
 ## Troubleshooting
 
+- **“The redirect_uri is not associated with this application” (GitHub):** The callback URL in your GitHub OAuth App must match **exactly** what the app sends. Open your app in the browser (e.g. your Railway URL), sign in, and in the GitHub section look at the grey hint that shows the callback URL (e.g. `https://your-app.up.railway.app/api/auth/github/callback`). In [GitHub OAuth Apps](https://github.com/settings/developers) → your app → **Authorization callback URL**, paste that exact URL (no trailing slash, use `https`). Save and try **Connect with GitHub** again.
 - **502 Bad Gateway:** The app must listen on the port Railway provides. The Dockerfile already uses `PORT` (or 8000). Ensure no other `PORT` or start command overrides it.
 - **Settings disappear after deploy:** Confirm the volume is attached to the app service and the mount path is exactly `/app/backend/data`.
 - **Webhook not receiving events:** In GitHub, check the webhook URL and that the repo can reach your Railway URL. Set a webhook secret in both GitHub and the app.
