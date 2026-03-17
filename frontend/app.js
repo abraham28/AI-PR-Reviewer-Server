@@ -1,6 +1,7 @@
 (function () {
   const API = "/api";
   const $ = (id) => document.getElementById(id);
+  const fetchOpts = { credentials: "include" };
 
   function setStatus(msg, type) {
     const el = $("status");
@@ -49,9 +50,34 @@
     status.textContent = (token && String(token).length > 0) ? "Connected" : "";
   }
 
+  function showScreen(login) {
+    const loginEl = $("login_screen");
+    const appEl = $("app_screen");
+    const logoutRow = $("logout_row");
+    if (loginEl) loginEl.hidden = !login;
+    if (appEl) appEl.hidden = login;
+    if (logoutRow) logoutRow.hidden = !login ? false : true;
+  }
+
+  async function checkAuth() {
+    try {
+      const r = await fetch(API + "/auth/status", fetchOpts);
+      if (!r.ok) return { authRequired: false, authenticated: true };
+      const s = await r.json();
+      if (!s.auth_required) return { authRequired: false, authenticated: true };
+      return { authRequired: true, authenticated: !!s.authenticated };
+    } catch (_) {
+      return { authRequired: false, authenticated: true };
+    }
+  }
+
   async function load() {
     try {
-      const r = await fetch(API + "/settings");
+      const r = await fetch(API + "/settings", fetchOpts);
+      if (r.status === 401) {
+        showScreen(true);
+        return;
+      }
       if (!r.ok) throw new Error(r.statusText);
       const s = await r.json();
       const set = (id, val) => { const e = $(id); if (e) e.value = val ?? ""; };
@@ -78,9 +104,59 @@
         showToast("GitHub connection failed. Check OAuth app callback URL and try again.", "error");
         history.replaceState({}, "", window.location.pathname);
       }
+      const auth = await checkAuth();
+      if (auth.authRequired) {
+        $("logout_row").hidden = false;
+      }
     } catch (e) {
       setStatus("Failed to load settings: " + e.message, "error");
     }
+  }
+
+  async function init() {
+    const auth = await checkAuth();
+    if (auth.authRequired && !auth.authenticated) {
+      showScreen(true);
+      return;
+    }
+    showScreen(false);
+    if (auth.authRequired) $("logout_row").hidden = false;
+    setWebhookUrl();
+    load();
+  }
+
+  async function login(e) {
+    e.preventDefault();
+    const password = $("admin_password")?.value;
+    const errEl = $("login_error");
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (errEl) { errEl.hidden = true; errEl.textContent = ""; }
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch(API + "/auth/login", {
+        ...fetchOpts,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: password || "" }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (errEl) { errEl.textContent = data.detail || "Login failed"; errEl.hidden = false; }
+        return;
+      }
+      showScreen(false);
+      $("logout_row").hidden = false;
+      setWebhookUrl();
+      load();
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function logout() {
+    await fetch(API + "/auth/logout", { ...fetchOpts, method: "POST" });
+    showScreen(true);
+    $("admin_password").value = "";
   }
 
   async function save() {
@@ -89,6 +165,7 @@
     setStatus("Saving…");
     try {
       const r = await fetch(API + "/settings", {
+        ...fetchOpts,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -126,6 +203,7 @@
     }
     // Save so backend has client secret for callback (user may have already saved)
     fetch(API + "/settings", {
+      ...fetchOpts,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -144,7 +222,7 @@
     if (!select) return;
     setWebhookStatus("Loading…");
     try {
-      const r = await fetch(API + "/repos");
+      const r = await fetch(API + "/repos", fetchOpts);
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error(err.detail || r.statusText);
@@ -183,6 +261,7 @@
     setWebhookStatus("Creating…");
     try {
       const r = await fetch(API + "/webhooks/create", {
+        ...fetchOpts,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ owner, repo: repoName, webhook_url: webhookUrl || undefined }),
@@ -202,6 +281,7 @@
   $("connect_github_btn")?.addEventListener("click", connectGitHub);
   $("load_repos_btn")?.addEventListener("click", loadRepos);
   $("create_webhook_btn")?.addEventListener("click", createWebhook);
-  setWebhookUrl();
-  load();
+  $("login_form")?.addEventListener("submit", login);
+  $("logout_btn")?.addEventListener("click", logout);
+  init();
 })();

@@ -2,15 +2,19 @@
 
 Webhook-based app that reviews GitHub pull requests with AI (OpenAI or Anthropic) and posts a summary plus inline comments. Run in Docker and expose with ngrok for GitHub webhooks.
 
+**Deploy on Railway:** see [docs/RAILWAY.md](docs/RAILWAY.md) for push-to-GitHub and Railway deployment (no Postgres required).
+
 ## Quick start
 
 1. **Build and run with Docker**
 
    ```bash
+   # When exposing publicly, set an admin password (used to sign in to the settings UI)
+   export ADMIN_PASSWORD="your-secret-password"
    docker compose up -d
    ```
 
-   App: http://localhost:8000
+   App: http://localhost:8000. If `ADMIN_PASSWORD` is set, you must sign in with that password to access settings.
 
 2. **Configure in the UI** (http://localhost:8000)
 
@@ -39,9 +43,12 @@ On **pull_request** (opened/synchronize), the app fetches the diff, runs batched
 ## API
 
 - `GET /` – Frontend (settings UI)
-- `GET /api/settings` – Read settings (secrets masked)
-- `POST /api/settings` – Update settings (JSON body)
-- `GET /api/auth/github` – Redirect to GitHub OAuth (connect account)
+- `GET /api/auth/status` – Auth status (no auth required)
+- `POST /api/auth/login` – Sign in (body: `{"password": "..."}`; sets session cookie)
+- `POST /api/auth/logout` – Sign out
+- `GET /api/settings` – Read settings (secrets masked; requires auth if `ADMIN_PASSWORD` set)
+- `POST /api/settings` – Update settings (JSON body; requires auth if set)
+- `GET /api/auth/github` – Redirect to GitHub OAuth (requires auth if set)
 - `GET /api/auth/github/callback` – OAuth callback (stores token)
 - `GET /api/repos` – List repos (for webhook UI; requires token)
 - `POST /api/webhooks/create` – Create webhook on a repo (body: `owner`, `repo`, optional `webhook_url`)
@@ -62,6 +69,12 @@ On **pull_request** (opened/synchronize), the app fetches the diff, runs batched
 | Max batch chars | Diff batch size (default 12000) |
 | Max tokens | Per AI request (default 4096) |
 | Max inline comments | Cap per PR (default 20) |
+
+## Security
+
+- **Admin auth:** Set the environment variable `ADMIN_PASSWORD` to protect the settings UI and all control APIs (settings, repos list, webhook creation, GitHub OAuth). Without it, anyone who can reach the app can change configuration. The webhook endpoint `POST /api/webhook/github` stays public so GitHub can deliver events; protect it by setting a **webhook secret** in the app and in GitHub.
+- **Session:** Signing in sets an HttpOnly, SameSite=Lax session cookie (Secure when using HTTPS or `X-Forwarded-Proto: https`). Sessions last 7 days.
+- **Deploying publicly:** Always set `ADMIN_PASSWORD` (and use HTTPS). Optionally set `SECURE_COOKIE=1` if your proxy does not send `X-Forwarded-Proto`.
 
 ## Run without Docker
 

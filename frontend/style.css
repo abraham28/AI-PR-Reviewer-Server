@@ -109,6 +109,20 @@ body {
   text-decoration: underline;
 }
 
+.error-hint {
+  color: var(--error);
+  margin-top: 0.5rem;
+}
+
+.logout-row {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+}
+
+.login-form .field {
+  margin-bottom: 1rem;
+}
+
 .field {
   margin-bottom: 1rem;
 }

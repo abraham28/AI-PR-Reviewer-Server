@@ -7,10 +7,29 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="app">
+  <div id="login_screen" class="app login-screen" hidden>
+    <header class="header">
+      <h1>AI PR Reviewer</h1>
+      <p class="subtitle">Sign in to manage settings.</p>
+    </header>
+    <main class="main">
+      <section class="card">
+        <form id="login_form" class="login-form">
+          <div class="field">
+            <label for="admin_password">Admin password</label>
+            <input type="password" id="admin_password" name="password" placeholder="Enter ADMIN_PASSWORD" autocomplete="current-password" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Sign in</button>
+          <p id="login_error" class="hint error-hint" hidden></p>
+        </form>
+      </section>
+    </main>
+  </div>
+  <div id="app_screen" class="app">
     <header class="header">
       <h1>AI PR Reviewer</h1>
       <p class="subtitle">Configure GitHub webhook and AI provider. Expose this app (e.g. with ngrok) and set the webhook URL in your repo.</p>
+      <p id="logout_row" class="logout-row" hidden><button type="button" id="logout_btn" class="btn btn-small">Sign out</button></p>
     </header>
 
     <main class="main">

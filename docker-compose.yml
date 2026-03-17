@@ -8,4 +8,6 @@ services:
       - ./data:/app/backend/data
     environment:
       - PYTHONUNBUFFERED=1
+      # Required when the app is reachable from the internet. Protects settings, repos, and webhook creation.
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     restart: unless-stopped

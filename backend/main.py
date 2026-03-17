@@ -5,20 +5,32 @@ import hmac
 import hashlib
 import json
 import logging
+import os
 import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import Depends, FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from auth import (
+    auth_enabled,
+    clear_session_cookie,
+    require_admin,
+    set_session_cookie,
+    _admin_password,
+)
 from config import load_settings, save_settings
 from github_client import get_pr_diff, post_review, create_webhook, list_repos
 from review import run_review_pipeline
+
+
+def _auth_dep(request: Request) -> None:
+    require_admin(request)
 
 # In-memory OAuth state (state -> timestamp) for CSRF; cleared on use and when stale
 _oauth_states: dict[str, float] = {}
@@ -64,6 +76,10 @@ class CreateWebhookBody(BaseModel):
     webhook_url: str | None = None
 
 
+class LoginBody(BaseModel):
+    password: str
+
+
 def _prune_oauth_states() -> None:
     now = time.time()
     for k in list(_oauth_states):
@@ -71,8 +87,48 @@ def _prune_oauth_states() -> None:
             del _oauth_states[k]
 
 
+def _constant_time_compare(a: str, b: str) -> bool:
+    return hmac.compare_digest(a.encode(), b.encode())
+
+
+@app.post("/api/auth/login")
+def api_login(body: LoginBody, request: Request):
+    """Accept admin password and set session cookie. Returns 401 if auth disabled or wrong password."""
+    if not auth_enabled():
+        raise HTTPException(status_code=400, detail="Admin password not configured (set ADMIN_PASSWORD).")
+    secret = _admin_password()
+    if not _constant_time_compare(body.password, secret):
+        raise HTTPException(status_code=401, detail="Invalid password.")
+    response = JSONResponse(content={"ok": True})
+    secure = (
+        request.url.scheme == "https"
+        or request.headers.get("X-Forwarded-Proto") == "https"
+        or os.environ.get("SECURE_COOKIE") == "1"
+    )
+    set_session_cookie(response, secret, secure=secure)
+    return response
+
+
+@app.post("/api/auth/logout")
+def api_logout():
+    response = JSONResponse(content={"ok": True})
+    clear_session_cookie(response)
+    return response
+
+
+@app.get("/api/auth/status")
+def api_auth_status(request: Request):
+    """Return whether auth is required and whether the current request is authenticated."""
+    if not auth_enabled():
+        return {"auth_required": False, "authenticated": True}
+    from auth import get_session_cookie, verify_session_cookie
+    cookie = get_session_cookie(request)
+    secret = _admin_password()
+    return {"auth_required": True, "authenticated": bool(cookie and verify_session_cookie(cookie, secret))}
+
+
 @app.get("/api/settings")
-def api_get_settings():
+def api_get_settings(request: Request, _: None = Depends(_auth_dep)):
     s = load_settings()
     # Mask secrets in response
     out = dict(s)
@@ -90,7 +146,7 @@ def api_get_settings():
 
 
 @app.post("/api/settings")
-def api_post_settings(update: SettingsUpdate):
+def api_post_settings(update: SettingsUpdate, request: Request, _: None = Depends(_auth_dep)):
     s = load_settings()
     if update.github_token is not None:
         if not update.github_token.startswith("***"):
@@ -219,7 +275,7 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
 
 
 @app.get("/api/auth/github")
-async def auth_github(request: Request):
+async def auth_github(request: Request, _: None = Depends(_auth_dep)):
     """Redirect to GitHub OAuth authorize URL."""
     s = load_settings()
     client_id = (s.get("github_oauth_client_id") or "").strip()
@@ -242,7 +298,7 @@ async def auth_github(request: Request):
 
 
 @app.get("/api/auth/github/callback")
-async def auth_github_callback(request: Request):
+async def auth_github_callback(request: Request, _: None = Depends(_auth_dep)):
     """Exchange code for token and store; redirect back to app."""
     s = load_settings()
     client_id = (s.get("github_oauth_client_id") or "").strip()
@@ -281,7 +337,7 @@ async def auth_github_callback(request: Request):
 
 
 @app.get("/api/repos")
-def api_list_repos():
+def api_list_repos(request: Request, _: None = Depends(_auth_dep)):
     """List repos the user has access to (requires GitHub token)."""
     s = load_settings()
     token = (s.get("github_token") or "").strip()
@@ -296,7 +352,7 @@ def api_list_repos():
 
 
 @app.post("/api/webhooks/create")
-async def api_create_webhook(request: Request, body: CreateWebhookBody):
+async def api_create_webhook(request: Request, body: CreateWebhookBody, _: None = Depends(_auth_dep)):
     """Create a webhook on the given repo. Uses stored token and optional webhook_url (default: request origin + path)."""
     s = load_settings()
     token = (s.get("github_token") or "").strip()
