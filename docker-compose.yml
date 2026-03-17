@@ -1,0 +1,11 @@
+services:
+  pr-reviewer:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Bind mount: copy this folder to another machine to move data
+      - ./data:/app/backend/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

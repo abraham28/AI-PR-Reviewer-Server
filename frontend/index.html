@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI PR Reviewer – Settings</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>AI PR Reviewer</h1>
+      <p class="subtitle">Configure GitHub webhook and AI provider. Expose this app (e.g. with ngrok) and set the webhook URL in your repo.</p>
+    </header>
+
+    <main class="main">
+      <section class="card">
+        <h2>GitHub</h2>
+        <div class="field">
+          <label for="github_token">Personal Access Token</label>
+          <input type="password" id="github_token" placeholder="ghp_..." autocomplete="off" />
+          <span class="hint">Required to fetch PR diffs and post review comments. Needs <code>repo</code>, <code>read:org</code> (if private org).</span>
+        </div>
+        <div class="field">
+          <label for="webhook_secret">Webhook Secret</label>
+          <input type="password" id="webhook_secret" placeholder="Optional: same value as in GitHub webhook" autocomplete="off" />
+          <span class="hint">Set the same value in GitHub repo → Settings → Webhooks → Secret. Leave empty to skip verification.</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>AI Provider</h2>
+        <div class="field">
+          <label for="ai_provider">Provider</label>
+          <select id="ai_provider">
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai">OpenAI (GPT)</option>
+          </select>
+        </div>
+        <div class="field openai-key">
+          <label for="openai_api_key">OpenAI API Key</label>
+          <input type="password" id="openai_api_key" placeholder="sk-..." autocomplete="off" />
+        </div>
+        <div class="field anthropic-key">
+          <label for="anthropic_api_key">Anthropic API Key</label>
+          <input type="password" id="anthropic_api_key" placeholder="sk-ant-..." autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="model">Model</label>
+          <input type="text" id="model" placeholder="e.g. claude-sonnet-4-20250514 or gpt-4o" />
+          <span class="hint">Leave empty to use default (Claude Sonnet / GPT-4o).</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Review limits</h2>
+        <div class="field">
+          <label for="max_batch_chars">Max batch size (chars)</label>
+          <input type="number" id="max_batch_chars" min="1000" max="100000" value="12000" />
+          <span class="hint">Larger diffs are split into batches of this size.</span>
+        </div>
+        <div class="field">
+          <label for="max_tokens">Max tokens per AI call</label>
+          <input type="number" id="max_tokens" min="500" max="16000" value="4096" />
+        </div>
+        <div class="field">
+          <label for="max_inline_comments">Max inline comments per PR</label>
+          <input type="number" id="max_inline_comments" min="1" max="100" value="20" />
+        </div>
+      </section>
+
+      <section class="card webhook-info">
+        <h2>Webhook URL</h2>
+        <p>In your GitHub repo: <strong>Settings → Webhooks → Add webhook</strong></p>
+        <ul>
+          <li>Payload URL: <code id="webhook_url">https://your-ngrok-url.ngrok.io/api/webhook/github</code></li>
+          <li>Content type: <code>application/json</code></li>
+          <li>Secret: same as above</li>
+          <li>Events: <strong>Pull requests</strong></li>
+        </ul>
+      </section>
+
+      <div class="actions">
+        <button type="button" id="save_btn" class="btn btn-primary">Save settings</button>
+        <span id="status" class="status"></span>
+      </div>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
