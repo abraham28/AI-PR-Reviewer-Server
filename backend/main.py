@@ -27,6 +27,7 @@ from auth import (
 from config import load_settings, save_settings
 from github_client import get_pr_diff, post_review, create_webhook, list_repos
 from review import run_review_pipeline
+from runs_store import add_run, get_runs, update_run_status
 
 
 def _auth_dep(request: Request) -> None:
@@ -209,12 +210,16 @@ def _make_call_ai(settings: dict):
     return call_ai
 
 
-def _run_review(owner: str, repo: str, pull_number: int, head_sha: str):
+def _run_review(owner: str, repo: str, pull_number: int, head_sha: str, run_id: str = ""):
+    if run_id:
+        update_run_status(run_id, "running")
     try:
         settings = load_settings()
         token = (settings.get("github_token") or "").strip()
         if not token:
             logger.error("GitHub token not configured")
+            if run_id:
+                update_run_status(run_id, "failure", "GitHub token not configured")
             return
         diff = get_pr_diff(token, owner, repo, pull_number)
         if not diff or not diff.strip():
@@ -224,6 +229,8 @@ def _run_review(owner: str, repo: str, pull_number: int, head_sha: str):
                 summary="No diff to review (empty or unchanged).",
                 inline_comments=[],
             )
+            if run_id:
+                update_run_status(run_id, "success")
             return
         call_ai = _make_call_ai(settings)
         max_batch = int(settings.get("max_batch_chars") or 12000)
@@ -241,8 +248,12 @@ def _run_review(owner: str, repo: str, pull_number: int, head_sha: str):
             review_warnings=review_warnings,
         )
         logger.info("Posted review for %s/%s#%s", owner, repo, pull_number)
+        if run_id:
+            update_run_status(run_id, "success")
     except Exception as e:
         logger.exception("Review failed: %s", e)
+        if run_id:
+            update_run_status(run_id, "failure", str(e))
 
 
 def _verify_webhook(payload: bytes, signature: str | None, secret: str) -> bool:
@@ -280,8 +291,10 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     head_sha = (pr.get("head", {}).get("sha") or "").strip()
     if not owner or not repo_name or not pull_number or not head_sha:
         raise HTTPException(status_code=400, detail="Missing repo or PR fields")
-    background_tasks.add_task(_run_review, owner, repo_name, pull_number, head_sha)
-    return JSONResponse(content={"ok": True, "review": "queued"})
+    pr_url = pr.get("html_url") or f"https://github.com/{owner}/{repo_name}/pull/{pull_number}"
+    run_id = add_run(owner, repo_name, pull_number, pr_url)
+    background_tasks.add_task(_run_review, owner, repo_name, pull_number, head_sha, run_id)
+    return JSONResponse(content={"ok": True, "review": "queued", "run_id": run_id})
 
 
 @app.get("/api/auth/github")
@@ -379,6 +392,13 @@ async def api_create_webhook(request: Request, body: CreateWebhookBody, _: None 
     except Exception as e:
         logger.exception("Create webhook failed: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/runs")
+def api_get_runs(request: Request, _: None = Depends(_auth_dep), limit: int = 100):
+    """List recent webhook review runs (queued, running, success, failure)."""
+    runs = get_runs(limit=min(limit, 200))
+    return {"runs": runs}
 
 
 @app.get("/api/health")

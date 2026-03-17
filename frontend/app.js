@@ -108,6 +108,7 @@
       if (auth.authRequired) {
         $("logout_row").hidden = false;
       }
+      loadRuns();
     } catch (e) {
       setStatus("Failed to load settings: " + e.message, "error");
     }
@@ -241,6 +242,62 @@
     }
   }
 
+  function formatRunTime(iso) {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = (now - d) / 1000;
+      if (diff < 60) return "Just now";
+      if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+      if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+      return d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  async function loadRuns() {
+    const tbody = $("runs_tbody");
+    const empty = $("runs_empty");
+    const table = $("runs_table");
+    const statusEl = $("runs_status");
+    if (!tbody) return;
+    if (statusEl) statusEl.textContent = "Loading…";
+    try {
+      const r = await fetch(API + "/runs?limit=100", fetchOpts);
+      if (r.status === 401) return;
+      if (!r.ok) throw new Error(r.statusText);
+      const data = await r.json();
+      const runs = data.runs || [];
+      tbody.innerHTML = "";
+      if (runs.length === 0) {
+        if (empty) { empty.hidden = false; }
+        if (table) table.classList.add("hidden");
+      } else {
+        if (empty) empty.hidden = true;
+        if (table) table.classList.remove("hidden");
+        runs.forEach((run) => {
+          const tr = document.createElement("tr");
+          const status = run.status || "—";
+          const statusClass = status === "success" ? "run-success" : status === "failure" ? "run-failure" : status === "running" ? "run-running" : "run-queued";
+          tr.innerHTML =
+            "<td>" + formatRunTime(run.received_at) + "</td>" +
+            "<td><code>" + (run.owner && run.repo ? run.owner + "/" + run.repo : "—") + "</code></td>" +
+            "<td>#" + (run.pr_number ?? "—") + "</td>" +
+            "<td><span class=\"run-badge " + statusClass + "\" title=\"" + (run.error || "") + "\">" + status + "</span></td>" +
+            "<td><a href=\"" + (run.pr_url || "#") + "\" target=\"_blank\" rel=\"noopener\">View PR</a></td>";
+          tbody.appendChild(tr);
+        });
+      }
+      if (statusEl) statusEl.textContent = runs.length ? runs.length + " run(s)" : "";
+    } catch (e) {
+      if (statusEl) statusEl.textContent = "Failed to load";
+      if (empty) { empty.textContent = "Failed to load runs."; empty.hidden = false; }
+      if (table) table.classList.add("hidden");
+    }
+  }
+
   async function createWebhook() {
     const manual = $("webhook_repo_manual")?.value.trim();
     const select = $("webhook_repo");
@@ -283,5 +340,6 @@
   $("create_webhook_btn")?.addEventListener("click", createWebhook);
   $("login_form")?.addEventListener("submit", login);
   $("logout_btn")?.addEventListener("click", logout);
+  $("refresh_runs_btn")?.addEventListener("click", () => loadRuns());
   init();
 })();

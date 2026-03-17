@@ -144,6 +144,31 @@
         </details>
       </section>
 
+      <section class="card runs-card">
+        <h2>Review runs</h2>
+        <p class="card-desc">Recent webhook-triggered reviews (queued, running, or completed).</p>
+        <div class="runs-toolbar">
+          <button type="button" id="refresh_runs_btn" class="btn btn-small">Refresh</button>
+          <span id="runs_status" class="status"></span>
+        </div>
+        <div id="runs_container" class="runs-container">
+          <table class="runs-table" id="runs_table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Repo</th>
+                <th>PR</th>
+                <th>Status</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody id="runs_tbody">
+            </tbody>
+          </table>
+          <p id="runs_empty" class="runs-empty hint" hidden>No runs yet. Push a PR or sync a branch to trigger a webhook.</p>
+        </div>
+      </section>
+
       <div class="actions">
         <button type="button" id="save_btn" class="btn btn-primary">Save settings</button>
         <span id="status" class="status"></span>

@@ -43,8 +43,9 @@ env/
 .DS_Store
 Thumbs.db
 
-# Project-specific: persisted settings (contains API keys / tokens)
+# Project-specific: persisted settings and run history
 backend/data/settings.json
+backend/data/runs.json
 
 # Bind-mounted data folder (Docker); copy this folder to move data to another machine
 data/
