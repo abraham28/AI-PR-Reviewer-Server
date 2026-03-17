@@ -50,6 +50,9 @@ if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 elif FRONTEND_STATIC.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_STATIC)), name="static")
+FAVICON_DIR = FRONTEND_STATIC / "favicon"
+if FAVICON_DIR.exists():
+    app.mount("/favicon", StaticFiles(directory=str(FAVICON_DIR)), name="favicon")
 
 executor = ThreadPoolExecutor(max_workers=2)
 
@@ -407,16 +410,6 @@ def health():
 
 
 # --- Serve frontend ---
-
-
-@app.get("/favicon.svg")
-def favicon():
-    """Serve favicon from frontend so it works with either static or dist."""
-    for directory in (FRONTEND_STATIC, FRONTEND_DIST):
-        path = directory / "favicon.svg"
-        if path.exists():
-            return FileResponse(path, media_type="image/svg+xml")
-    raise HTTPException(status_code=404)
 
 
 @app.get("/")
