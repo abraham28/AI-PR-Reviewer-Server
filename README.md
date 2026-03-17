@@ -12,31 +12,27 @@ Webhook-based app that reviews GitHub pull requests with AI (OpenAI or Anthropic
 
    App: http://localhost:8000
 
-2. **Configure in the UI**
+2. **Configure in the UI** (http://localhost:8000)
 
-   - Open http://localhost:8000
-   - Set **GitHub Personal Access Token** (needs `repo`; for org repos often `read:org` too)
-   - Set **Webhook secret** (optional; use the same value in GitHub)
-   - Choose **AI Provider** (Anthropic or OpenAI) and set the matching API key
-   - Optionally set **Model** (e.g. `claude-sonnet-4-20250514`, `gpt-4o`) and review limits
-   - Click **Save settings**
+   **GitHub (integrated):**
+   - **Option A – OAuth:** Create a [GitHub OAuth App](https://github.com/settings/developers) and set Authorization callback URL to `http://localhost:8000/api/auth/github/callback` (or your ngrok URL + `/api/auth/github/callback`). Enter Client ID and Client Secret in the app, save, then click **Connect with GitHub**.
+   - **Option B – Token:** Or paste a Personal Access Token (scope `repo`, and `read:org` for private org repos).
+   - Set **Webhook secret** (optional; used when creating webhooks and validating payloads).
 
-3. **Expose with ngrok**
+   **AI:** Choose Anthropic or OpenAI, set the API key, and optionally the model name. Save.
+
+3. **Expose with ngrok** (so GitHub can reach the webhook)
 
    ```bash
    ngrok http 8000
    ```
 
-   Use the ngrok HTTPS URL (e.g. `https://abc123.ngrok.io`) as the base for the webhook.
+   If you use ngrok, open the app via the ngrok URL and reconnect GitHub (OAuth callback URL must match the URL you use).
 
-4. **Add GitHub webhook**
+4. **Add webhook to a repo**
 
-   - Repo → **Settings → Webhooks → Add webhook**
-   - **Payload URL:** `https://YOUR-NGROK-URL/api/webhook/github`
-   - **Content type:** `application/json`
-   - **Secret:** same as in the app (optional)
-   - **Events:** **Pull requests**
-   - Save
+   - In the app, open **Add webhook to a repo**, click **Load repos**, pick a repo (or type `owner/repo`). Set **Webhook URL** to your public URL (e.g. ngrok) + `/api/webhook/github`, or leave empty to use the current page origin. Click **Create webhook**.
+   - Or manually: Repo → Settings → Webhooks → Add webhook → Payload URL `https://YOUR-URL/api/webhook/github`, content type `application/json`, events **Pull requests**.
 
 On **pull_request** (opened/synchronize), the app fetches the diff, runs batched AI review, and posts a summary comment plus inline comments on the PR.
 
@@ -45,6 +41,10 @@ On **pull_request** (opened/synchronize), the app fetches the diff, runs batched
 - `GET /` – Frontend (settings UI)
 - `GET /api/settings` – Read settings (secrets masked)
 - `POST /api/settings` – Update settings (JSON body)
+- `GET /api/auth/github` – Redirect to GitHub OAuth (connect account)
+- `GET /api/auth/github/callback` – OAuth callback (stores token)
+- `GET /api/repos` – List repos (for webhook UI; requires token)
+- `POST /api/webhooks/create` – Create webhook on a repo (body: `owner`, `repo`, optional `webhook_url`)
 - `POST /api/webhook/github` – GitHub webhook (pull_request)
 - `GET /api/health` – Health check
 - `GET /docs` – OpenAPI docs
@@ -53,8 +53,9 @@ On **pull_request** (opened/synchronize), the app fetches the diff, runs batched
 
 | Setting | Description |
 |--------|-------------|
-| GitHub token | Personal Access Token for repo access and posting comments |
-| Webhook secret | Optional; must match GitHub webhook secret |
+| GitHub token | Set via **Connect with GitHub** (OAuth) or paste a Personal Access Token |
+| OAuth Client ID / Secret | From GitHub OAuth App; callback URL = this app’s origin + `/api/auth/github/callback` |
+| Webhook secret | Optional; used when creating webhooks and validating payloads |
 | AI provider | `anthropic` or `openai` |
 | OpenAI / Anthropic API key | Key for the selected provider |
 | Model | e.g. `claude-sonnet-4-20250514`, `gpt-4o` (defaults if empty) |

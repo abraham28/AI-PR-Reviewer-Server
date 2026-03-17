@@ -192,6 +192,105 @@ body {
   background: var(--accent-hover);
 }
 
+.btn-secondary {
+  background: var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--muted);
+}
+
+.btn-small {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.connect-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.or-divider {
+  text-align: center;
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.toast {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.toast.hidden,
+.toast[hidden] {
+  display: none;
+}
+
+.toast.success {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success);
+}
+
+.toast.error {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--error);
+}
+
+.toast.info {
+  background: rgba(167, 139, 250, 0.15);
+  color: var(--accent);
+}
+
+.repo-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.repo-select {
+  min-width: 200px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.repo-manual {
+  flex: 1;
+  min-width: 140px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.or-inline {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.manual-webhook-details {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.manual-webhook-details summary {
+  cursor: pointer;
+  color: var(--text);
+}
+
 .status {
   font-size: 0.85rem;
   color: var(--muted);

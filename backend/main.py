@@ -5,17 +5,24 @@ import hmac
 import hashlib
 import json
 import logging
+import secrets
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from config import load_settings, save_settings
-from github_client import get_pr_diff, post_review
+from github_client import get_pr_diff, post_review, create_webhook, list_repos
 from review import run_review_pipeline
+
+# In-memory OAuth state (state -> timestamp) for CSRF; cleared on use and when stale
+_oauth_states: dict[str, float] = {}
+_OAUTH_STATE_TTL = 600  # 10 min
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +46,8 @@ executor = ThreadPoolExecutor(max_workers=2)
 
 class SettingsUpdate(BaseModel):
     github_token: str | None = None
+    github_oauth_client_id: str | None = None
+    github_oauth_client_secret: str | None = None
     webhook_secret: str | None = None
     ai_provider: str | None = None
     openai_api_key: str | None = None
@@ -49,6 +58,19 @@ class SettingsUpdate(BaseModel):
     max_inline_comments: int | None = None
 
 
+class CreateWebhookBody(BaseModel):
+    owner: str
+    repo: str
+    webhook_url: str | None = None
+
+
+def _prune_oauth_states() -> None:
+    now = time.time()
+    for k in list(_oauth_states):
+        if now - _oauth_states[k] > _OAUTH_STATE_TTL:
+            del _oauth_states[k]
+
+
 @app.get("/api/settings")
 def api_get_settings():
     s = load_settings()
@@ -56,6 +78,8 @@ def api_get_settings():
     out = dict(s)
     if out.get("github_token"):
         out["github_token"] = "***" + out["github_token"][-4:] if len(out["github_token"]) > 4 else "***"
+    if out.get("github_oauth_client_secret"):
+        out["github_oauth_client_secret"] = "***" if out["github_oauth_client_secret"] else ""
     if out.get("webhook_secret"):
         out["webhook_secret"] = "***" if out["webhook_secret"] else ""
     if out.get("openai_api_key"):
@@ -71,6 +95,10 @@ def api_post_settings(update: SettingsUpdate):
     if update.github_token is not None:
         if not update.github_token.startswith("***"):
             s["github_token"] = update.github_token
+    if update.github_oauth_client_id is not None:
+        s["github_oauth_client_id"] = update.github_oauth_client_id
+    if update.github_oauth_client_secret is not None and update.github_oauth_client_secret and not update.github_oauth_client_secret.startswith("***"):
+        s["github_oauth_client_secret"] = update.github_oauth_client_secret
     if update.webhook_secret is not None:
         s["webhook_secret"] = update.webhook_secret
     if update.ai_provider is not None:
@@ -188,6 +216,103 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Missing repo or PR fields")
     background_tasks.add_task(_run_review, owner, repo_name, pull_number, head_sha)
     return JSONResponse(content={"ok": True, "review": "queued"})
+
+
+@app.get("/api/auth/github")
+async def auth_github(request: Request):
+    """Redirect to GitHub OAuth authorize URL."""
+    s = load_settings()
+    client_id = (s.get("github_oauth_client_id") or "").strip()
+    client_secret = (s.get("github_oauth_client_secret") or "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub OAuth not configured. Set OAuth Client ID and Secret in Settings.",
+        )
+    base = str(request.base_url).rstrip("/")
+    redirect_uri = f"{base}/api/auth/github/callback"
+    state = secrets.token_urlsafe(32)
+    _prune_oauth_states()
+    _oauth_states[state] = time.time()
+    url = (
+        "https://github.com/login/oauth/authorize"
+        f"?client_id={client_id}&redirect_uri={redirect_uri}&scope=repo,read:org&state={state}"
+    )
+    return RedirectResponse(url=url, status_code=302)
+
+
+@app.get("/api/auth/github/callback")
+async def auth_github_callback(request: Request):
+    """Exchange code for token and store; redirect back to app."""
+    s = load_settings()
+    client_id = (s.get("github_oauth_client_id") or "").strip()
+    client_secret = (s.get("github_oauth_client_secret") or "").strip()
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    if not code or not client_id or not client_secret:
+        return RedirectResponse(url="/?github=error", status_code=302)
+    _prune_oauth_states()
+    if not state or state not in _oauth_states:
+        return RedirectResponse(url="/?github=error&reason=state", status_code=302)
+    del _oauth_states[state]
+    base = str(request.base_url).rstrip("/")
+    redirect_uri = f"{base}/api/auth/github/callback"
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            "https://github.com/login/oauth/access_token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "redirect_uri": redirect_uri,
+            },
+            headers={"Accept": "application/json"},
+        )
+    if r.status_code != 200:
+        return RedirectResponse(url="/?github=error", status_code=302)
+    data = r.json()
+    token = (data.get("access_token") or "").strip()
+    if not token:
+        return RedirectResponse(url="/?github=error", status_code=302)
+    s = load_settings()
+    s["github_token"] = token
+    save_settings(s)
+    return RedirectResponse(url="/?github=connected", status_code=302)
+
+
+@app.get("/api/repos")
+def api_list_repos():
+    """List repos the user has access to (requires GitHub token)."""
+    s = load_settings()
+    token = (s.get("github_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="GitHub token not set. Connect GitHub or paste a token.")
+    try:
+        repos = list_repos(token)
+        return {"repos": repos}
+    except Exception as e:
+        logger.exception("List repos failed: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/webhooks/create")
+async def api_create_webhook(request: Request, body: CreateWebhookBody):
+    """Create a webhook on the given repo. Uses stored token and optional webhook_url (default: request origin + path)."""
+    s = load_settings()
+    token = (s.get("github_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="GitHub token not set. Connect GitHub or paste a token.")
+    webhook_url = (body.webhook_url or "").strip()
+    if not webhook_url:
+        base = str(request.base_url).rstrip("/")
+        webhook_url = f"{base}/api/webhook/github"
+    secret = (s.get("webhook_secret") or "").strip()
+    try:
+        result = create_webhook(token, body.owner, body.repo, webhook_url, secret)
+        return {"ok": True, "hook_id": result.get("id"), "message": f"Webhook added to {body.owner}/{body.repo}"}
+    except Exception as e:
+        logger.exception("Create webhook failed: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/health")

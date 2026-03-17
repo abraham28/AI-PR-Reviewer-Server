@@ -26,6 +26,8 @@ def load_settings() -> dict[str, Any]:
 def _default_settings() -> dict[str, Any]:
     return {
         "github_token": "",
+        "github_oauth_client_id": "",
+        "github_oauth_client_secret": "",
         "webhook_secret": "",
         "ai_provider": "anthropic",  # "openai" | "anthropic"
         "openai_api_key": "",

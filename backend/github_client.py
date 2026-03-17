@@ -66,3 +66,47 @@ def post_review(
                     pr.create_review_comment(body_text, commit_id, path, line, side="RIGHT")
                 except Exception:
                     pass
+
+
+def create_webhook(
+    github_token: str,
+    owner: str,
+    repo: str,
+    webhook_url: str,
+    secret: str = "",
+) -> dict:
+    """Create a webhook on the repo. Returns the created hook info or raises."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/hooks"
+    config = {"url": webhook_url, "content_type": "json"}
+    if secret:
+        config["secret"] = secret
+    payload = {
+        "name": "web",
+        "config": config,
+        "events": ["pull_request"],
+        "active": True,
+    }
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(
+            url,
+            headers={
+                "Authorization": f"token {github_token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            json=payload,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+def list_repos(github_token: str) -> list[dict]:
+    """List repos the authenticated user can access (for dropdown)."""
+    g = Github(github_token)
+    user = g.get_user()
+    repos = []
+    for repo in user.get_repos(sort="updated", direction="desc"):
+        try:
+            repos.append({"full_name": repo.full_name, "private": repo.private})
+        except Exception:
+            continue
+    return repos[:100]

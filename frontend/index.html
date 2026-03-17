@@ -14,19 +14,34 @@
     </header>
 
     <main class="main">
+      <div id="github_toast" class="toast" role="status" aria-live="polite" hidden></div>
+
       <section class="card">
         <h2>GitHub</h2>
-        <p class="card-desc">Used to read PR diffs and post review comments. Create a <strong>Fine-grained</strong> or <strong>Classic</strong> token with <code>repo</code> (and <code>read:org</code> for private org repos).</p>
-        <p class="link-row"><a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener">Create fine-grained token</a> · <a href="https://github.com/settings/tokens/new?scopes=repo,read:org" target="_blank" rel="noopener">Create classic token (repo + read:org)</a></p>
+        <p class="card-desc">Connect with GitHub so this app can read PRs and post reviews. Use OAuth (recommended) or paste a Personal Access Token.</p>
+        <div class="field">
+          <label for="github_oauth_client_id">OAuth App Client ID</label>
+          <input type="text" id="github_oauth_client_id" placeholder="Ov23li..." autocomplete="off" />
+          <span class="hint">From <a href="https://github.com/settings/developers" target="_blank" rel="noopener">GitHub → Settings → Developer settings → OAuth Apps</a>. Create an app and set Authorization callback URL to <code id="oauth_callback_sample">http://localhost:8000/api/auth/github/callback</code>.</span>
+        </div>
+        <div class="field">
+          <label for="github_oauth_client_secret">OAuth App Client Secret</label>
+          <input type="password" id="github_oauth_client_secret" placeholder="Optional if already saved" autocomplete="off" />
+        </div>
+        <div class="connect-row">
+          <button type="button" id="connect_github_btn" class="btn btn-secondary">Connect with GitHub</button>
+          <span id="github_status" class="hint"></span>
+        </div>
+        <p class="card-desc or-divider">— or paste a token —</p>
         <div class="field">
           <label for="github_token">Personal Access Token</label>
           <input type="password" id="github_token" placeholder="ghp_... or github_pat_..." autocomplete="off" />
-          <span class="hint">Keep this secret. Stored only on this server.</span>
+          <span class="hint">If you don’t use OAuth, create a token with <code>repo</code> (+ <code>read:org</code> for private orgs). <a href="https://github.com/settings/tokens/new?scopes=repo,read:org" target="_blank" rel="noopener">Create classic token</a>.</span>
         </div>
         <div class="field">
           <label for="webhook_secret">Webhook Secret</label>
-          <input type="password" id="webhook_secret" placeholder="Optional: same value as in GitHub webhook" autocomplete="off" />
-          <span class="hint">Optional. If set, use the same value when adding the webhook in your repo. <a href="https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries" target="_blank" rel="noopener">How validation works</a>.</span>
+          <input type="password" id="webhook_secret" placeholder="Optional: same value when creating webhook" autocomplete="off" />
+          <span class="hint">Optional. Used when creating webhooks below and for validating payloads. <a href="https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries" target="_blank" rel="noopener">How it works</a>.</span>
         </div>
       </section>
 
@@ -75,16 +90,39 @@
       </section>
 
       <section class="card webhook-info">
-        <h2>Connect GitHub (webhook)</h2>
-        <p class="card-desc">Expose this app to the internet (e.g. with <a href="https://ngrok.com" target="_blank" rel="noopener">ngrok</a>: <code>ngrok http 8000</code>), then add a webhook in your repo so GitHub can call this app on new PRs.</p>
-        <p class="link-row"><a href="https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks" target="_blank" rel="noopener">GitHub: Creating webhooks</a></p>
-        <p><strong>In your repo:</strong> Settings → Webhooks → Add webhook</p>
-        <ul>
-          <li><strong>Payload URL:</strong> <code id="webhook_url">https://your-ngrok-url.ngrok.io/api/webhook/github</code></li>
-          <li><strong>Content type:</strong> <code>application/json</code></li>
-          <li><strong>Secret:</strong> same as “Webhook secret” above (optional)</li>
-          <li><strong>Events:</strong> Let me select individual events → check <strong>Pull requests</strong></li>
-        </ul>
+        <h2>Add webhook to a repo</h2>
+        <p class="card-desc">Create the PR webhook from here. Use the same URL you use to open this app (e.g. ngrok URL if you’re tunneling).</p>
+        <div class="field">
+          <label for="webhook_repo">Repository</label>
+          <div class="repo-input-row">
+            <select id="webhook_repo" class="repo-select">
+              <option value="">— Select repo —</option>
+            </select>
+            <button type="button" id="load_repos_btn" class="btn btn-small">Load repos</button>
+            <span class="or-inline">or</span>
+            <input type="text" id="webhook_repo_manual" class="repo-manual" placeholder="owner/repo" />
+          </div>
+          <span class="hint" id="webhook_repo_hint">Load repos after connecting GitHub, or type <code>owner/repo</code>.</span>
+        </div>
+        <div class="field">
+          <label for="webhook_url_input">Webhook URL</label>
+          <input type="url" id="webhook_url_input" placeholder="https://..." />
+          <span class="hint">Leave empty to use this page’s URL + <code>/api/webhook/github</code>.</span>
+        </div>
+        <div class="connect-row">
+          <button type="button" id="create_webhook_btn" class="btn btn-secondary">Create webhook</button>
+          <span id="webhook_status" class="status"></span>
+        </div>
+        <details class="manual-webhook-details">
+          <summary>Add webhook manually in GitHub</summary>
+          <p>In your repo: <strong>Settings → Webhooks → Add webhook</strong></p>
+          <ul>
+            <li><strong>Payload URL:</strong> <code id="webhook_url">https://your-ngrok-url.ngrok.io/api/webhook/github</code></li>
+            <li><strong>Content type:</strong> <code>application/json</code></li>
+            <li><strong>Secret:</strong> same as “Webhook secret” above</li>
+            <li><strong>Events:</strong> Pull requests</li>
+          </ul>
+        </details>
       </section>
 
       <div class="actions">
