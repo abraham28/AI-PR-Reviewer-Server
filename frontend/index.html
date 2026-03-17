@@ -16,20 +16,23 @@
     <main class="main">
       <section class="card">
         <h2>GitHub</h2>
+        <p class="card-desc">Used to read PR diffs and post review comments. Create a <strong>Fine-grained</strong> or <strong>Classic</strong> token with <code>repo</code> (and <code>read:org</code> for private org repos).</p>
+        <p class="link-row"><a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener">Create fine-grained token</a> · <a href="https://github.com/settings/tokens/new?scopes=repo,read:org" target="_blank" rel="noopener">Create classic token (repo + read:org)</a></p>
         <div class="field">
           <label for="github_token">Personal Access Token</label>
-          <input type="password" id="github_token" placeholder="ghp_..." autocomplete="off" />
-          <span class="hint">Required to fetch PR diffs and post review comments. Needs <code>repo</code>, <code>read:org</code> (if private org).</span>
+          <input type="password" id="github_token" placeholder="ghp_... or github_pat_..." autocomplete="off" />
+          <span class="hint">Keep this secret. Stored only on this server.</span>
         </div>
         <div class="field">
           <label for="webhook_secret">Webhook Secret</label>
           <input type="password" id="webhook_secret" placeholder="Optional: same value as in GitHub webhook" autocomplete="off" />
-          <span class="hint">Set the same value in GitHub repo → Settings → Webhooks → Secret. Leave empty to skip verification.</span>
+          <span class="hint">Optional. If set, use the same value when adding the webhook in your repo. <a href="https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries" target="_blank" rel="noopener">How validation works</a>.</span>
         </div>
       </section>
 
       <section class="card">
         <h2>AI Provider</h2>
+        <p class="card-desc">Choose one provider. The AI reviews each PR diff and suggests inline comments and a summary.</p>
         <div class="field">
           <label for="ai_provider">Provider</label>
           <select id="ai_provider">
@@ -39,16 +42,18 @@
         </div>
         <div class="field openai-key">
           <label for="openai_api_key">OpenAI API Key</label>
+          <p class="link-row"><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get OpenAI API key</a> (sign in → API keys → Create new)</p>
           <input type="password" id="openai_api_key" placeholder="sk-..." autocomplete="off" />
         </div>
         <div class="field anthropic-key">
           <label for="anthropic_api_key">Anthropic API Key</label>
+          <p class="link-row"><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get Anthropic API key</a> (Console → API keys)</p>
           <input type="password" id="anthropic_api_key" placeholder="sk-ant-..." autocomplete="off" />
         </div>
         <div class="field">
           <label for="model">Model</label>
           <input type="text" id="model" placeholder="e.g. claude-sonnet-4-20250514 or gpt-4o" />
-          <span class="hint">Leave empty to use default (Claude Sonnet / GPT-4o).</span>
+          <span class="hint">Leave empty for default: Claude Sonnet or GPT-4o. <a href="https://docs.anthropic.com/en/docs/build-with-claude/models" target="_blank" rel="noopener">Claude models</a> · <a href="https://platform.openai.com/docs/models" target="_blank" rel="noopener">OpenAI models</a>.</span>
         </div>
       </section>
 
@@ -70,13 +75,15 @@
       </section>
 
       <section class="card webhook-info">
-        <h2>Webhook URL</h2>
-        <p>In your GitHub repo: <strong>Settings → Webhooks → Add webhook</strong></p>
+        <h2>Connect GitHub (webhook)</h2>
+        <p class="card-desc">Expose this app to the internet (e.g. with <a href="https://ngrok.com" target="_blank" rel="noopener">ngrok</a>: <code>ngrok http 8000</code>), then add a webhook in your repo so GitHub can call this app on new PRs.</p>
+        <p class="link-row"><a href="https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks" target="_blank" rel="noopener">GitHub: Creating webhooks</a></p>
+        <p><strong>In your repo:</strong> Settings → Webhooks → Add webhook</p>
         <ul>
-          <li>Payload URL: <code id="webhook_url">https://your-ngrok-url.ngrok.io/api/webhook/github</code></li>
-          <li>Content type: <code>application/json</code></li>
-          <li>Secret: same as above</li>
-          <li>Events: <strong>Pull requests</strong></li>
+          <li><strong>Payload URL:</strong> <code id="webhook_url">https://your-ngrok-url.ngrok.io/api/webhook/github</code></li>
+          <li><strong>Content type:</strong> <code>application/json</code></li>
+          <li><strong>Secret:</strong> same as “Webhook secret” above (optional)</li>
+          <li><strong>Events:</strong> Let me select individual events → check <strong>Pull requests</strong></li>
         </ul>
       </section>
 
