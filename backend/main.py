@@ -409,6 +409,16 @@ def health():
 # --- Serve frontend ---
 
 
+@app.get("/favicon.svg")
+def favicon():
+    """Serve favicon from frontend so it works with either static or dist."""
+    for directory in (FRONTEND_STATIC, FRONTEND_DIST):
+        path = directory / "favicon.svg"
+        if path.exists():
+            return FileResponse(path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404)
+
+
 @app.get("/")
 def index():
     if FRONTEND_DIST.exists():
